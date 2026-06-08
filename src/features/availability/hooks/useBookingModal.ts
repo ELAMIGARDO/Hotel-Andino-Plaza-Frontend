@@ -95,7 +95,7 @@ export function useBookingModal({
       if (name === "fechaIngreso" && nuevoEstado.fechaSalida) {
         if (esReservaNormal) {
           // 🔒 Si es reserva de cliente, la salida DEBE ser posterior (No el mismo día)
-          if (nuevoEstado.fechaSalida <= value) {
+          if (nuevoEstado.fechaSalida < value) {
             nuevoEstado.fechaSalida = "";
             toast.info(
               "Para reservas, la fecha de salida debe ser posterior al ingreso.",

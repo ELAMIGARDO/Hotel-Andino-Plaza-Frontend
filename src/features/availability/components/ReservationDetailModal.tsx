@@ -117,6 +117,7 @@ return (
               type="text"
               value={motivoCancelacion}
               onChange={(e) => setMotivoCancelacion(e.target.value)}
+              maxLength={60}
               placeholder="Ej. Emergencia familiar, error en fecha..."
               className="w-full text-xs p-2 rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:ring-1 focus:ring-red-500 focus:outline-none"
             />
