@@ -35,7 +35,11 @@ export function useBookingModal({
     estado: "ACTIVA", // 🔥 1. CAMBIO: Inicializamos el estado operativo del registro
   });
 
-  const hoyString = new Date().toISOString().split("T")[0];
+  const hoyLocal = new Date();
+  const anio = hoyLocal.getFullYear();
+  const mes = String(hoyLocal.getMonth() + 1).padStart(2, "0");
+  const dia = String(hoyLocal.getDate()).padStart(2, "0");
+  const hoyString = `${anio}-${mes}-${dia}`; // Dará "2026-06-07" exactamente
 
   const [allReservas, setAllReservas] = useState<any[]>([]);
   useEffect(() => {

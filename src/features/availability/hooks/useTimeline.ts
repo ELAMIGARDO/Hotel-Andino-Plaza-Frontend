@@ -62,31 +62,31 @@ export function useTimeline({ onSuccessRefrescar, filtroGlobal }: UseTimelinePro
     }
   };
 
-  useEffect(() => {
-    // 2. Calcular el lunes de la semana actual de manera segura
-    const hoy = new Date();
-    // Forzamos el inicio de la semana en lunes (1) de forma local
-    const lunes = startOfWeek(hoy, { weekStartsOn: 1 });
+  useEffect(() => { 
+  // 2. CORREGIDO: Forzar que la lista de días empiece exactamente HOY y no el lunes pasado
+  const hoy = new Date(); 
+  hoy.setHours(0, 0, 0, 0); // Limpiamos horas para evitar errores de zona horaria
 
-    const listaFechas = Array.from({ length: 7 }).map((_, idx) => addDays(lunes, idx));
+  // Generamos 7 días correlativos empezando desde HOY (Día 7, Día 8, Día 9...)
+  const listaFechas = Array.from({ length: 7 }).map((_, idx) => addDays(hoy, idx)); 
+  
+  const listaHeaders = listaFechas.map((fecha) => { 
+    const nombreDia = fecha.toLocaleDateString("es-ES", { weekday: "short" }); 
+    const numeroDia = fecha.getDate(); 
+    const nombreCapitalizado = nombreDia.charAt(0).toUpperCase() + nombreDia.slice(1);
+    return `${nombreCapitalizado} ${numeroDia < 10 ? `0${numeroDia}` : numeroDia}`; 
+  }); 
 
-    const listaHeaders = listaFechas.map((fecha) => {
-      const nombreDia = fecha.toLocaleDateString("es-ES", { weekday: "short" });
-      const numeroDia = fecha.getDate();
-      return `${nombreDia.charAt(0).toUpperCase() + nombreDia.slice(1)} ${numeroDia}`;
-    });
+  setFechasSemana(listaFechas); 
+  setDays(listaHeaders); 
 
-    setFechasSemana(listaFechas);
-    setDays(listaHeaders);
-    
-    // Carga inicial
-    consultarBackend();
+  // Carga inicial del backend
+  consultarBackend(); 
 
-    // Inyectar el método de refresco en la vista si es necesario
-    if (onSuccessRefrescar) {
-      onSuccessRefrescar(consultarBackend);
-    }
-  }, []);
+  if (onSuccessRefrescar) { 
+    onSuccessRefrescar(consultarBackend); 
+  } 
+}, []); 
 
   // 3. Verificación de ocupación basada en Strings planos para destruir el bug de Timezone (un día menos)
   const verificarOcupacion = (habitacionId: number, fechaColumna: Date): ReservaReal | undefined => {

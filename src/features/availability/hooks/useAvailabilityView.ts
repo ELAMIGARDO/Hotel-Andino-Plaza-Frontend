@@ -84,7 +84,6 @@ export function useAvailabilityView() {
     cargarDatosDelHotel();
   }, [cargarDatosDelHotel]);
 
-  // 4. Lógica matemática de bloques flotantes del Gantt
     // 4. Lógica matemática de bloques flotantes del Gantt (CON CANDADO DE HISTORIAL)
   const calcularBloquesDeHabitacion = (habitacionId: number) => {
     if (fechasObjetos.length === 0) return [];
