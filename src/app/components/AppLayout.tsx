@@ -1,5 +1,4 @@
-/// Componente de Layout Principal para la Aplicación
-
+// Componente de Layout Principal para la Aplicación
 import { useState, useRef, useEffect } from "react";
 import { Sidebar } from "./Sidebar";
 import { Outlet, Link, useLocation, useNavigate } from "react-router";
@@ -26,6 +25,12 @@ export function AppLayout() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  // 🚪 FUNCIÓN DE LOGOUT OPERATIVO
+  const handleLogout = () => {
+    localStorage.clear(); 
+    navigate("/");
+  };
+
   const notifications = [
     { id: 1, type: "success", title: "Nueva Reserva Confirmada", message: "Juan Pérez reservó la Suite 201 por 3 noches.", time: "Hace 10 min", icon: CheckCircle2, color: "text-green-600", bg: "bg-green-50" },
     { id: 2, type: "warning", title: "Cancelación de Reserva", message: "Reserva #4091 ha sido cancelada.", time: "Hace 1 hora", icon: AlertCircle, color: "text-amber-600", bg: "bg-amber-50" },
@@ -49,21 +54,17 @@ export function AppLayout() {
       <Sidebar />
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
         <header className="h-16 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-6 shrink-0 z-20 relative transition-colors duration-200">
-          <h1 className="text-xl font-semibold text-slate-800 dark:text-slate-100 tracking-tight">{getPageTitle()}</h1>
-          
+          <h1 className="text-xl font-semibold text-slate-800 dark:text-slate-100 tracking-tight">
+            {getPageTitle()}
+          </h1>
           <div className="flex items-center gap-4">
             
-            {/* Notification Dropdown Container */}
+            {/* Notification Dropdown */}
             <div className="relative" ref={dropdownRef}>
-              <button 
-                onClick={() => setShowNotifications(!showNotifications)}
-                className="p-2 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-full transition-colors relative"
-              >
+              <button onClick={() => setShowNotifications(!showNotifications)} className="p-2 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-full transition-colors relative">
                 <Bell size={20} />
                 <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-blue-500 rounded-full border-2 border-white dark:border-slate-900"></span>
               </button>
-
-              {/* Notification Menu */}
               {showNotifications && (
                 <div className="absolute right-0 mt-2 w-80 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg overflow-hidden z-50 origin-top-right">
                   <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/50">
@@ -84,25 +85,15 @@ export function AppLayout() {
                       </div>
                     ))}
                   </div>
-                  <div className="p-2 bg-slate-50 dark:bg-slate-800/80 border-t border-slate-100 dark:border-slate-700">
-                    <button className="w-full py-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-md transition-colors">
-                      Marcar todas como leídas
-                    </button>
-                  </div>
                 </div>
               )}
             </div>
 
-            {/* Profile Dropdown Container */}
+            {/* Profile Dropdown */}
             <div className="relative" ref={profileRef}>
-              <div 
-                onClick={() => setShowProfileMenu(!showProfileMenu)}
-                className="h-8 w-8 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-400 rounded-full flex items-center justify-center font-medium shadow-sm border border-blue-200 dark:border-blue-800 cursor-pointer hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors select-none"
-              >
+              <div onClick={() => setShowProfileMenu(!showProfileMenu)} className="h-8 w-8 bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-400 rounded-full flex items-center justify-center font-medium shadow-sm border border-blue-200 dark:border-blue-800 cursor-pointer hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors select-none">
                 AD
               </div>
-
-              {/* Profile Menu */}
               {showProfileMenu && (
                 <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-lg overflow-hidden z-50 origin-top-right">
                   <div className="px-4 py-3 border-b border-slate-100 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50">
@@ -110,41 +101,24 @@ export function AppLayout() {
                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">admin@andinoplaza.com</p>
                   </div>
                   <div className="p-2 space-y-0.5">
-                    <Link 
-                      to="/settings"
-                      onClick={() => setShowProfileMenu(false)}
-                      className="w-full px-3 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 hover:text-blue-600 dark:hover:text-blue-400 rounded-md transition-colors flex items-center gap-3"
-                    >
-                      <Settings size={16} />
-                      Configuración
+                    <Link to="/settings" onClick={() => setShowProfileMenu(false)} className="w-full px-3 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 hover:text-blue-600 dark:hover:text-blue-400 rounded-md transition-colors flex items-center gap-3">
+                      <Settings size={16} /> Configuración
                     </Link>
-                    <button 
-                      onClick={() => {
-                        document.documentElement.classList.toggle('dark');
-                        setShowProfileMenu(false);
-                      }}
-                      className="w-full px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-blue-600 rounded-md transition-colors flex items-center gap-3 dark:text-slate-300 dark:hover:bg-slate-700"
-                    >
-                      <Moon size={16} />
-                      Modo Noche
+                    <button onClick={() => { document.documentElement.classList.toggle("dark"); setShowProfileMenu(false); }} className="w-full px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 hover:text-blue-600 rounded-md transition-colors flex items-center gap-3 dark:text-slate-300 dark:hover:bg-slate-700">
+                      <Moon size={16} /> Modo Noche
                     </button>
                   </div>
                   <div className="p-2 border-t border-slate-100 dark:border-slate-700">
-                    <button
-                      onClick={() => navigate("/")}
-                      className="w-full px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors flex items-center gap-3"
-                    >
-                      <LogOut size={16} className="text-red-500 dark:text-red-400" />
-                      Cerrar Sesión
+                    <button onClick={handleLogout} className="w-full px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors flex items-center gap-3">
+                      <LogOut size={16} className="text-red-500 dark:text-red-400" /> Cerrar Sesión
                     </button>
                   </div>
                 </div>
               )}
             </div>
-            
+
           </div>
         </header>
-
         <div className="flex-1 overflow-auto flex flex-col">
           <Outlet />
         </div>

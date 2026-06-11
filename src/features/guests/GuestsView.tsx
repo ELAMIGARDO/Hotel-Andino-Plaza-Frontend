@@ -1,16 +1,11 @@
-// VISTA DE HUÉSPEDES - GESTIÓN DE CLIENTES DEL HOTEL
-import { Search, Plus, Edit2, Trash2 } from "lucide-react";
+// VISTA DE HUÉSPEDES - GESTIÓN DE CLIENTES DEL HOTEL (COMPLETA Y PROTEGIDA)
+import { Search, Edit2 } from "lucide-react";
 import { useGuests } from "./hooks/useGuests";
 import { Link } from "react-router";
 
 export function GuestsView() {
   // 🔥 Inyección de la lógica limpia de extracción y unicidad desde el Hook
-  const { 
-    loading, 
-    terminoBusqueda, 
-    setTerminoBusqueda, 
-    filteredGuests 
-  } = useGuests();
+  const { loading, terminoBusqueda, setTerminoBusqueda, filteredGuests } = useGuests();
 
   // Pantalla de carga mientras lee el array de reservas de Spring Boot
   if (loading) {
@@ -20,6 +15,9 @@ export function GuestsView() {
       </div>
     );
   }
+
+  // 🛡️ Aseguramos que filteredGuests sea un array antes de validar longitudes
+  const seguroFilteredGuests = Array.isArray(filteredGuests) ? filteredGuests : [];
 
   return (
     <div className="flex-1 overflow-auto p-8 bg-slate-50 dark:bg-slate-900 transition-colors duration-200 min-h-screen">
@@ -40,7 +38,7 @@ export function GuestsView() {
 
           {/* Indicador del total de clientes únicos extraídos en vivo */}
           <div className="text-xs bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 px-3 py-1.5 rounded-lg font-medium border border-blue-100 dark:border-blue-900/30">
-            Total en Historial: {filteredGuests.length} Clientes únicos
+            Total en Historial: {seguroFilteredGuests.length} Clientes únicos
           </div>
         </div>
 
@@ -54,56 +52,51 @@ export function GuestsView() {
                   <th className="px-6 py-4">Documento (DNI/Pasaporte)</th>
                   <th className="px-6 py-4">Correo Electrónico</th>
                   <th className="px-6 py-4">Teléfono</th>
-                  <th className="px-6 py-4">Estado</th> {/* 💡 Alineado a la izquierda para empalmar con la bola */}
+                  <th className="px-6 py-4">Estado</th>
                   <th className="px-6 py-4 text-right">Acciones</th>
                 </tr>
               </thead>
-              
               <tbody className="divide-y divide-slate-100 dark:divide-slate-700/50 text-sm">
-                {filteredGuests.map((guest) => {
-                  // 🎯 CANDADO CONDICIONAL DE ESTADO OPERATIVO
+                {seguroFilteredGuests.map((guest) => {
+                  // 🛡️ CONTROL DE CAMPOS DEFENSIVOS: Evita que propiedades indefinidas congelen el render
+                  if (!guest) return null;
+                  
+                  const nombre = guest.nombreCompleto || "Huésped sin Nombre";
+                  const tipoDoc = guest.tipoDocumento || "DNI";
+                  const numDoc = guest.numeroDocumento || "Sin Documento";
+                  const correo = guest.correoElectronico || "sin-correo@andinoplaza.com";
+                  const telf = guest.telefono || "Sin Teléfono";
                   const esActivo = guest.estadoOperativo === "ACTIVO";
 
                   return (
-                    <tr key={guest.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-700/30 transition-colors group">
+                    <tr key={guest.id || Math.random()} className="hover:bg-slate-50/50 dark:hover:bg-slate-700/30 transition-colors group">
                       <td className="px-6 py-4 font-medium text-slate-800 dark:text-slate-200">
-                        {guest.nombreCompleto}
+                        {nombre}
                       </td>
                       <td className="px-6 py-4 text-slate-600 dark:text-slate-400 uppercase">
-                        {guest.tipoDocumento}: {guest.numeroDocumento}
+                        {tipoDoc}: {numDoc}
                       </td>
                       <td className="px-6 py-4 text-slate-600 dark:text-slate-400">
-                        {guest.correoElectronico}
+                        {correo}
                       </td>
                       <td className="px-6 py-4 text-slate-600 dark:text-slate-400">
-                        {guest.telefono}
+                        {telf}
                       </td>
-                      
                       {/* 🟢 INTERFAZ DE ESFERAS EN TIEMPO REAL INYECTADA */}
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2">
-                          <span className={`w-2.5 h-2.5 rounded-full ${
-                            esActivo 
-                              ? "bg-emerald-500 animate-pulse" // Esfera verde parpadeante si está hoy en el hotel
-                              : "bg-rose-400"                  // Esfera rosa/rojo fijo si ya finalizó su estadía
-                          }`} />
-                          <span className={`text-xs font-medium uppercase tracking-wider ${
-                            esActivo 
-                              ? "text-emerald-600 dark:text-emerald-400 font-semibold" 
-                              : "text-slate-400 dark:text-slate-500"
-                          }`}>
+                          <span className={`w-2.5 h-2.5 rounded-full ${esActivo ? "bg-emerald-500 animate-pulse" : "bg-rose-400"}`} />
+                          <span className={`text-xs font-medium uppercase tracking-wider ${esActivo ? "text-emerald-600 dark:text-emerald-400 font-semibold" : "text-slate-400 dark:text-slate-500"}`}>
                             {esActivo ? "Hospedado" : "Finalizado"}
                           </span>
                         </div>
                       </td>
-
                       <td className="px-6 py-4">
                         <div className="flex justify-end gap-2">
-                          {/* Enlace estético al UI Kit */}
                           <Link 
                             to="/ui-kit" 
                             className="p-1.5 text-slate-400 dark:text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-md transition-colors block" 
-                            title="Ver ficha" 
+                            title="Ver ficha"
                           >
                             <Edit2 size={16} />
                           </Link>
@@ -118,12 +111,12 @@ export function GuestsView() {
         </div>
 
         {/* Alerta de no resultados */}
-        {filteredGuests.length === 0 && (
+        {seguroFilteredGuests.length === 0 && (
           <div className="text-center py-8 bg-white dark:bg-slate-800 border border-t-0 border-slate-200 dark:border-slate-700 rounded-b-xl text-slate-500 dark:text-slate-400 text-sm">
             No se encontraron clientes registrados en el historial de reservas bajo ese criterio.
           </div>
         )}
-
+        
       </div>
     </div>
   );

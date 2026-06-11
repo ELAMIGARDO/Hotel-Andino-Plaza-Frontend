@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import axios from "axios";
-import { format, addDays, startOfWeek } from "date-fns";
+import { addDays } from "date-fns";
 
 // Interfaces de tipado estricto para las respuestas de Spring Boot
 export interface HabitacionReal {
@@ -17,8 +17,8 @@ export interface ReservaReal {
   tipoDocumento: string;
   numeroDocumento: string;
   fechaIngreso: string; // "YYYY-MM-DD"
-  fechaSalida: string;  // "YYYY-MM-DD"
-  estado: string;       // "ACTIVA", "FINALIZADA", "CANCELADA"
+  fechaSalida: string;   // "YYYY-MM-DD"
+  estado: string;        // "ACTIVA", "FINALIZADA", "CANCELADA"
   habitacion: {
     id: number;
   };
@@ -46,60 +46,81 @@ export function useTimeline({ onSuccessRefrescar, filtroGlobal }: UseTimelinePro
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [reservaSeleccionada, setReservaSeleccionada] = useState<ReservaReal | null>(null);
 
-  // 1. Función para consultar los datos del Backend (Spring Boot)
-  const consultarBackend = async () => {
+  // 1. Función para consultar los datos del Backend (Spring Boot) - COMPLETAMENTE CORREGIDA
+  const consultarBackend = useCallback(async () => {
+    // Recuperamos las credenciales almacenadas del login activo en formato "usuario:password"
+    const credentials = localStorage.getItem("auth_token");
+
+    if (!credentials) {
+      console.warn("useTimeline: No se encontraron credenciales en localStorage.");
+      setLoading(false);
+      return;
+    }
+
     try {
+      // 🛠️ CORRECCIÓN CRÍTICA: Convertimos el string "usuario:password" a Base64 para HTTP Basic [1]
+      const tokenBase64 = btoa(credentials);
+
+      const configHeaders = {
+        headers: {
+          "Authorization": `Basic ${tokenBase64}`,
+          "Content-Type": "application/json"
+        }
+      };
+
       const [resRooms, resReservas] = await Promise.all([
-        axios.get("http://localhost:8080/api/habitaciones"),
-        axios.get("http://localhost:8080/api/reservas"),
+        axios.get("http://localhost:8080/api/habitaciones", configHeaders),
+        axios.get("http://localhost:8080/api/reservas", configHeaders),
       ]);
-      setRooms(resRooms.data);
-      setReservas(resReservas.data);
+
+      // Aseguramos que la respuesta contenga arreglos para evitar bugs si la API cambia
+      setRooms(Array.isArray(resRooms.data) ? resRooms.data : []);
+      setReservas(Array.isArray(resReservas.data) ? resReservas.data : []);
     } catch (error) {
-      console.error("Error al conectar con la API de Spring Boot:", error);
+      console.error("Error al conectar con la API de Spring Boot en Timeline:", error);
+      // En caso de error, vaciamos de forma segura para evitar crashes de renderizado
+      setRooms([]);
+      setReservas([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  useEffect(() => { 
-  // 2. CORREGIDO: Forzar que la lista de días empiece exactamente HOY y no el lunes pasado
-  const hoy = new Date(); 
-  hoy.setHours(0, 0, 0, 0); // Limpiamos horas para evitar errores de zona horaria
+  useEffect(() => {
+    // 2. Forzar que la lista de días empiece exactamente HOY
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
 
-  // Generamos 7 días correlativos empezando desde HOY (Día 7, Día 8, Día 9...)
-  const listaFechas = Array.from({ length: 7 }).map((_, idx) => addDays(hoy, idx)); 
-  
-  const listaHeaders = listaFechas.map((fecha) => { 
-    const nombreDia = fecha.toLocaleDateString("es-ES", { weekday: "short" }); 
-    const numeroDia = fecha.getDate(); 
-    const nombreCapitalizado = nombreDia.charAt(0).toUpperCase() + nombreDia.slice(1);
-    return `${nombreCapitalizado} ${numeroDia < 10 ? `0${numeroDia}` : numeroDia}`; 
-  }); 
+    // Generamos 7 días correlativos empezando desde HOY
+    const listaFechas = Array.from({ length: 7 }).map((_, idx) => addDays(hoy, idx));
+    const listaHeaders = listaFechas.map((fecha) => {
+      const nombreDia = fecha.toLocaleDateString("es-ES", { weekday: "short" });
+      const numeroDia = fecha.getDate();
+      const nombreCapitalizado = nombreDia.charAt(0).toUpperCase() + nombreDia.slice(1);
+      return `${nombreCapitalizado} ${numeroDia < 10 ? `0${numeroDia}` : numeroDia}`;
+    });
 
-  setFechasSemana(listaFechas); 
-  setDays(listaHeaders); 
+    setFechasSemana(listaFechas);
+    setDays(listaHeaders);
 
-  // Carga inicial del backend
-  consultarBackend(); 
+    // Carga inicial del backend
+    consultarBackend();
 
-  if (onSuccessRefrescar) { 
-    onSuccessRefrescar(consultarBackend); 
-  } 
-}, []); 
+    if (onSuccessRefrescar) {
+      onSuccessRefrescar(consultarBackend);
+    }
+  }, [consultarBackend, onSuccessRefrescar]);
 
-  // 3. Verificación de ocupación basada en Strings planos para destruir el bug de Timezone (un día menos)
+  // 3. Verificación de ocupación basada en Strings planos
   const verificarOcupacion = (habitacionId: number, fechaColumna: Date): ReservaReal | undefined => {
+    const seguroReservas = Array.isArray(reservas) ? reservas : [];
     const anoCol = fechaColumna.getFullYear();
     const mesCol = fechaColumna.getMonth();
     const diaCol = fechaColumna.getDate();
     const timeColumna = new Date(anoCol, mesCol, diaCol, 0, 0, 0, 0).getTime();
 
-    return reservas.find((reserva) => {
-      if (reserva.habitacion.id !== habitacionId) return false;
-      
-      // 🛑 REMOVIDO: Ya no filtramos por r.estado === 'ACTIVA'. Queremos leer MANTENIMIENTO y LIMPIEZA.
-      // Solo ignoramos las reservas viejas archivadas
+    return seguroReservas.find((reserva) => {
+      if (!reserva || !reserva.habitacion || reserva.habitacion.id !== habitacionId) return false;
       if (reserva.estado === "FINALIZADA" || reserva.estado === "CANCELADA") return false;
 
       const [anoI, mesI, diaI] = reserva.fechaIngreso.split("-").map(Number);
@@ -112,8 +133,12 @@ export function useTimeline({ onSuccessRefrescar, filtroGlobal }: UseTimelinePro
     });
   };
 
-  // 4. Filtrado combinado (Por select de tipo, barra local y barra global del dashboard)
-  const filteredRooms = rooms.filter((room) => {
+  // 4. Filtrado combinado (Por select de tipo, barra local y barra global)
+  const seguroRooms = Array.isArray(rooms) ? rooms : [];
+  const seguroReservas = Array.isArray(reservas) ? reservas : [];
+
+  const filteredRooms = seguroRooms.filter((room) => {
+    if (!room) return false;
     const cumpleFiltroTipo = filterType === "all" || room.tipo.toLowerCase() === filterType.toLowerCase();
     const cumpleBusquedaInferior = room.numero.includes(buscarNumero);
     const terminoGlobal = filtroGlobal.toLowerCase().trim();
@@ -124,8 +149,8 @@ export function useTimeline({ onSuccessRefrescar, filtroGlobal }: UseTimelinePro
 
     const coincideHabitacion = room.numero.toLowerCase().includes(terminoGlobal) || room.tipo.toLowerCase().includes(terminoGlobal);
     
-    const coincideConReservaOCliente = reservas.some((reserva) => {
-      if (reserva.habitacion.id !== room.id) return false;
+    const coincideConReservaOCliente = seguroReservas.some((reserva) => {
+      if (!reserva || !reserva.habitacion || reserva.habitacion.id !== room.id) return false;
       const coincideIdReserva = reserva.id.toString().includes(terminoGlobal);
       const coincideNombreCliente = reserva.nombreCliente && reserva.nombreCliente.toLowerCase().includes(terminoGlobal);
       const coincideDocumento = reserva.numeroDocumento && reserva.numeroDocumento.includes(terminoGlobal);
@@ -135,7 +160,6 @@ export function useTimeline({ onSuccessRefrescar, filtroGlobal }: UseTimelinePro
     return cumpleFiltroTipo && cumpleBusquedaInferior && (coincideHabitacion || coincideConReservaOCliente);
   });
 
-  // Retornamos todos los estados y funciones que necesita AvailabilityTimeline.tsx
   return {
     filterType,
     setFilterType,

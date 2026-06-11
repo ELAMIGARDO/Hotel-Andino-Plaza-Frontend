@@ -24,7 +24,6 @@ export function useBookingModal({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [habitaciones, setHabitaciones] = useState<Habitacion[]>([]);
   const [isNombreBloqueado, setIsNombreBloqueado] = useState(false);
-
   const [formData, setFormData] = useState({
     nombreCliente: "",
     tipoDocumento: "DNI",
@@ -42,23 +41,53 @@ export function useBookingModal({
   const hoyString = `${anio}-${mes}-${dia}`; // Dará "2026-06-07" exactamente
 
   const [allReservas, setAllReservas] = useState<any[]>([]);
+
   useEffect(() => {
     if (isOpen) {
+      // 🔑 RECUPERACIÓN Y VALIDACIÓN DEL TOKEN DE MANERA SEGURA
+      const credentials = localStorage.getItem("auth_token");
+
+      if (!credentials) {
+        console.warn(
+          "useBookingModal: No se encontraron credenciales válidas en localStorage.",
+        );
+        return;
+      }
+
+      // 🛠️ CORRECCIÓN CRÍTICA: Convertimos el string plano a Base64 para pasar el filtro HTTP Basic
+      const tokenBase64 = btoa(credentials);
+
+      const configHeaders = {
+        headers: {
+          Authorization: `Basic ${tokenBase64}`,
+          "Content-Type": "application/json",
+        },
+      };
+
       Promise.all([
-        axios.get("http://localhost:8080/api/habitaciones"),
-        axios.get("http://localhost:8080/api/reservas"),
+        axios.get("http://localhost:8080/api/habitaciones", configHeaders),
+        axios.get("http://localhost:8080/api/reservas", configHeaders),
       ])
         .then(([resRooms, resReservas]) => {
-          setHabitaciones(resRooms.data);
-          setAllReservas(resReservas.data);
+          setHabitaciones(Array.isArray(resRooms.data) ? resRooms.data : []);
+          setAllReservas(
+            Array.isArray(resReservas.data) ? resReservas.data : [],
+          );
         })
-        .catch((err) =>
-          console.error("Error al sincronizar datos en el modal:", err),
-        );
+        .catch((err) => {
+          console.error("Error al sincronizar datos en el modal:", err);
+          setHabitaciones([]);
+          setAllReservas([]);
+        });
     }
   }, [isOpen]);
 
-  const habitacionesDisponibles = habitaciones.filter((room) => {
+  // 🛡️ SALVAGUARDA: Garantizamos arrays válidos para los filtros ante respuestas de error de la API
+  const seguroHabitaciones = Array.isArray(habitaciones) ? habitaciones : [];
+  const seguroReservas = Array.isArray(allReservas) ? allReservas : [];
+
+  const habitacionesDisponibles = seguroHabitaciones.filter((room) => {
+    if (!room) return false;
     // Si el recepcionista no ha completado ambas fechas, mostramos todas las habitaciones por defecto
     if (!formData.fechaIngreso || !formData.fechaSalida) return true;
 
@@ -66,14 +95,13 @@ export function useBookingModal({
     const finForm = formData.fechaSalida;
 
     // Buscamos si esta habitación tiene algún bloqueo activo que choque con el rango del formulario
-    const tieneChoque = allReservas.some((res) => {
-      if (res.habitacion.id !== room.id) return false;
-
+    const tieneChoque = seguroReservas.some((res) => {
+      if (!res || !res.habitacion || res.habitacion.id !== room.id)
+        return false;
       // Ignoramos el historial viejo (Finalizadas o Canceladas)
       if (res.estado === "FINALIZADA" || res.estado === "CANCELADA")
         return false;
-
-      // Fórmula matemática estricta de cruce de rangos: (Inicio1 <= Fin2) Y (Fin1 >= Inicio2)
+      // Fórmula matemática de cruce de rangos: (Inicio1 <= Fin2) Y (Fin1 >= Inicio2)
       return inicioForm <= res.fechaSalida && finForm >= res.fechaIngreso;
     });
 
@@ -85,16 +113,14 @@ export function useBookingModal({
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
   ) => {
     const { name, value } = e.target;
-
     setFormData((prev) => {
       const nuevoEstado = { ...prev, [name]: value };
-
-      // 🎯 NUEVA REGLA OPERATIVA INDEPENDIENTE
+      // 🎯 REGLA OPERATIVA INDEPENDIENTE
       const esReservaNormal = nuevoEstado.estado === "ACTIVA";
 
       if (name === "fechaIngreso" && nuevoEstado.fechaSalida) {
         if (esReservaNormal) {
-          // 🔒 Si es reserva de cliente, la salida DEBE ser posterior (No el mismo día)
+          // Si es reserva de cliente, la salida DEBE ser posterior (No el mismo día)
           if (nuevoEstado.fechaSalida < value) {
             nuevoEstado.fechaSalida = "";
             toast.info(
@@ -102,7 +128,7 @@ export function useBookingModal({
             );
           }
         } else {
-          // 🛠️ Si es Mantenimiento/Limpieza, se permite el mismo día, pero NO días anteriores
+          // Si es Mantenimiento/Limpieza, se permite el mismo día, pero NO días anteriores
           if (nuevoEstado.fechaSalida < value) {
             nuevoEstado.fechaSalida = "";
             toast.error(
@@ -111,7 +137,6 @@ export function useBookingModal({
           }
         }
       }
-
       return nuevoEstado;
     });
   };
@@ -128,32 +153,27 @@ export function useBookingModal({
 
     setFormData((prev) => {
       const nuevoEstado = { ...prev, numeroDocumento: filtrado };
-
       if (filtrado.length === reglasDocumento[prev.tipoDocumento]?.max) {
-        const clienteEncontrado = allReservas.find(
+        const clienteEncontrado = seguroReservas.find(
           (res) =>
+            res &&
             res.numeroDocumento &&
             res.numeroDocumento.trim() === filtrado.trim(),
         );
-
         if (clienteEncontrado) {
           nuevoEstado.nombreCliente = clienteEncontrado.nombreCliente;
           // 🔥 ACTIVAMOS EL BLOQUEO: Encontró al cliente, bloqueamos el input para que no lo alteren
           setIsNombreBloqueado(true);
-
           toast.success(`Huésped frecuente: Nombre fijado automáticamente.`, {
             style: { background: "#1E3A8A", color: "white", border: "none" },
             duration: 3000,
           });
         } else {
-          // Si borra el número o pone uno nuevo que no existe, liberamos el campo
           setIsNombreBloqueado(false);
         }
       } else {
-        // Si el número está incompleto, mantenemos el campo desbloqueado
         setIsNombreBloqueado(false);
       }
-
       return nuevoEstado;
     });
   };
@@ -190,14 +210,12 @@ export function useBookingModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
     if (!formData.habitacionId) {
       toast.error("Por favor, selecciona una habitación.");
       return;
     }
 
     const esReservaNormal = formData.estado === "ACTIVA";
-
     if (esReservaNormal) {
       if (formData.fechaSalida <= formData.fechaIngreso) {
         toast.error("La fecha de salida debe ser posterior a la de ingreso.");
@@ -205,8 +223,9 @@ export function useBookingModal({
       }
 
       // 🛑 CANDADO DE SEGURIDAD ABSOLUTO: Evita duplicar personas HOSPEDADAS HOY (Activas)
-      const clienteActivoHoy = allReservas.find((res) => {
+      const clienteActivoHoy = seguroReservas.find((res) => {
         return (
+          res &&
           res.estado === "ACTIVA" &&
           res.numeroDocumento &&
           res.numeroDocumento.trim() === formData.numeroDocumento.trim()
@@ -246,8 +265,31 @@ export function useBookingModal({
       habitacion: { id: parseInt(formData.habitacionId, 10) },
     };
 
+    // 🔑 RECUPERACIÓN Y VALIDACIÓN DEL TOKEN ANTES DEL POST
+    const credentials = localStorage.getItem("auth_token");
+    if (!credentials) {
+      toast.error("Sesión expirada. Por favor, inicia sesión nuevamente.");
+      setIsSubmitting(false);
+      return;
+    }
+
     try {
-      await axios.post("http://localhost:8080/api/reservas", payload);
+      // 🛠️ Cifrado Base64 inyectado en el POST
+      const tokenBase64 = btoa(credentials);
+
+      const configHeaders = {
+        headers: {
+          Authorization: `Basic ${tokenBase64}`,
+          "Content-Type": "application/json",
+        },
+      };
+
+      await axios.post(
+        "http://localhost:8080/api/reservas",
+        payload,
+        configHeaders,
+      );
+
       toast.success("Operación realizada con éxito", {
         style: { background: "#059669", color: "white", border: "none" },
       });
@@ -261,6 +303,7 @@ export function useBookingModal({
         habitacionId: "",
         estado: "ACTIVA",
       });
+
       onSuccess?.();
       onClose();
     } catch (error: any) {
