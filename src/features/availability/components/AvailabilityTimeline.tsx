@@ -29,6 +29,10 @@ export function AvailabilityTimeline({
     setReservaSeleccionada,
     verificarOcupacion,
     consultarBackend,
+    irSemanaAnterior,
+    irSemanaSiguiente,
+    irSemanaActual,
+    desplazamientoSemanas
   } = useTimeline({ onSuccessRefrescar, filtroGlobal });
 
   if (loading) {
@@ -50,6 +54,35 @@ export function AvailabilityTimeline({
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
             Vista general de habitaciones
           </p>
+          {/* 🎯 CONTROLADOR DE FLECHAS ADITIVO */}
+          <div className="flex items-center gap-1 bg-slate-50 dark:bg-slate-900/40 p-1 rounded-lg border border-slate-200 dark:border-slate-700 w-fit shadow-sm mt-3">
+            <button
+              onClick={irSemanaAnterior}
+              className="p-1.5 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 rounded-md hover:bg-white dark:hover:bg-slate-800 transition-colors"
+              title="Semana Anterior"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+              </svg>
+            </button>
+
+            <button
+              onClick={irSemanaActual}
+              className="px-2.5 py-1 text-xs font-semibold text-slate-600 dark:text-slate-300 rounded-md hover:bg-white dark:hover:bg-slate-800 transition-colors"
+            >
+              {desplazamientoSemanas === 0 ? "Hoy" : `Semana ${desplazamientoSemanas > 0 ? `+${desplazamientoSemanas}` : desplazamientoSemanas}`}
+            </button>
+
+            <button
+              onClick={irSemanaSiguiente}
+              className="p-1.5 text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 rounded-md hover:bg-white dark:hover:bg-slate-800 transition-colors"
+              title="Semana Siguiente"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+              </svg>
+            </button>
+          </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
@@ -181,10 +214,22 @@ export function AvailabilityTimeline({
                             ? "Disponible — Clic para reservar"
                             : `Estado: ${reservaEnCelda.estado} — ${reservaEnCelda.nombreCliente}`
                         }
-                        onClick={() => {
+                         onClick={() => {
                           if (isFree) {
+                            // ⏳ VALIDACIÓN: Bloquea la creación en días anteriores a hoy
+                            const hoyPlano = new Date();
+                            hoyPlano.setHours(0, 0, 0, 0);
+
+                            const fechaCeldaPlana = new Date(fechaDia);
+                            fechaCeldaPlana.setHours(0, 0, 0, 0);
+
+                            if (fechaCeldaPlana < hoyPlano) {
+                              return; // Se detiene y no abre el formulario de reservas
+                            }
+
                             onOpenModal();
                           } else {
+                            // 🗓️ AUDITORÍA: Permite abrir reservas antiguas para liberarlas
                             setReservaSeleccionada(reservaEnCelda);
                             setIsDetailOpen(true);
                           }

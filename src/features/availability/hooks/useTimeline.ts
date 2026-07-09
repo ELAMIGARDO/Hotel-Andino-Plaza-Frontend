@@ -32,6 +32,12 @@ interface UseTimelineProps {
 export function useTimeline({ onSuccessRefrescar, filtroGlobal }: UseTimelineProps) {
   const [filterType, setFilterType] = useState("all");
   const [buscarNumero, setBuscarNumero] = useState("");
+
+  const [desplazamientoSemanas, setDesplazamientoSemanas] = useState(0);
+
+  const irSemanaAnterior = () => setDesplazamientoSemanas(prev => prev - 1);
+  const irSemanaSiguiente = () => setDesplazamientoSemanas(prev => prev + 1);
+  const irSemanaActual = () => setDesplazamientoSemanas(0);
   
   // Estados de datos sincronizados con MySQL
   const [rooms, setRooms] = useState<HabitacionReal[]>([]);
@@ -87,11 +93,15 @@ export function useTimeline({ onSuccessRefrescar, filtroGlobal }: UseTimelinePro
   }, []);
 
   useEffect(() => {
-    // 2. Forzar que la lista de días empiece exactamente HOY
+    // 2. Forzar que la lista de días empiece exactamente HOY + el desplazamiento de las flechas
     const hoy = new Date();
+    
+    // 🔥 CONFIGURACIÓN ADITIVA: Le sumamos o restamos los 7 días multiplicados por el botón pulsado
+    hoy.setDate(hoy.getDate() + (desplazamientoSemanas * 7)); 
+    
     hoy.setHours(0, 0, 0, 0);
 
-    // Generamos 7 días correlativos empezando desde HOY
+    // 🟢 TODO TU CÓDIGO SIGUIENTE SE QUEDA EXACTAMENTE IGUAL SIN TOCAR NADA:
     const listaFechas = Array.from({ length: 7 }).map((_, idx) => addDays(hoy, idx));
     const listaHeaders = listaFechas.map((fecha) => {
       const nombreDia = fecha.toLocaleDateString("es-ES", { weekday: "short" });
@@ -103,13 +113,12 @@ export function useTimeline({ onSuccessRefrescar, filtroGlobal }: UseTimelinePro
     setFechasSemana(listaFechas);
     setDays(listaHeaders);
 
-    // Carga inicial del backend
     consultarBackend();
 
     if (onSuccessRefrescar) {
       onSuccessRefrescar(consultarBackend);
     }
-  }, [consultarBackend, onSuccessRefrescar]);
+  }, [consultarBackend, onSuccessRefrescar, desplazamientoSemanas]);
 
   // 3. Verificación de ocupación basada en Strings planos
   const verificarOcupacion = (habitacionId: number, fechaColumna: Date): ReservaReal | undefined => {
@@ -174,6 +183,10 @@ export function useTimeline({ onSuccessRefrescar, filtroGlobal }: UseTimelinePro
     reservaSeleccionada,
     setReservaSeleccionada,
     verificarOcupacion,
-    consultarBackend
+    consultarBackend,
+    irSemanaAnterior,
+    irSemanaSiguiente,
+    irSemanaActual,
+    desplazamientoSemanas,
   };
 }
