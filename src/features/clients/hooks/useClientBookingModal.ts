@@ -5,9 +5,15 @@ import { toast } from "sonner";
 interface UseClientBookingModalProps {
   isOpen: boolean;
   room: any;
-  selectedDate: Date | null;
+  selectedDate: Date | string | null;
   onClose: () => void;
   onSuccess?: () => void;
+  isEditing?: boolean;      
+  bookingId?: string;       
+  currentBooking?: {        
+    fechaIngreso: string;
+    fechaSalida: string;
+  };
 }
 
 export function useClientBookingModal({
@@ -16,6 +22,9 @@ export function useClientBookingModal({
   selectedDate,
   onClose,
   onSuccess,
+  isEditing = false,        
+  bookingId,                
+  currentBooking,           
 }: UseClientBookingModalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
@@ -23,23 +32,36 @@ export function useClientBookingModal({
     fechaSalida: "",
   });
 
-  // Datos auto-recuperados de la sesión activa del usuario
-  // Al registrarse, guardamos "nombre", "tipoDocumento" y "numeroDocumento" en la base de datos de usuarios
   const tokenPlano = localStorage.getItem("auth_token") || "";
-  const [userEmail] = tokenPlano.split(":"); // Extrae el correo/usuario de la sesión
 
+  // 1. Cargar las fechas iniciales dinámicamente según el modo activo
   useEffect(() => {
-    if (isOpen && selectedDate) {
-      const anio = selectedDate.getFullYear();
-      const mes = String(selectedDate.getMonth() + 1).padStart(2, "0");
-      const dia = String(selectedDate.getDate()).padStart(2, "0");
-      
+    if (!isOpen) return;
+
+    if (isEditing && currentBooking) {
+      // Si estamos modificando, precargamos el rango ya reservado
       setFormData({
-        fechaIngreso: `${anio}-${mes}-${dia}`,
-        fechaSalida: "", 
+        fechaIngreso: currentBooking.fechaIngreso,
+        fechaSalida: currentBooking.fechaSalida, 
       });
+    } else if (selectedDate) {
+      if (selectedDate instanceof Date) {
+        const anio = selectedDate.getFullYear();
+        const mes = String(selectedDate.getMonth() + 1).padStart(2, "0");
+        const dia = String(selectedDate.getDate()).padStart(2, "0");
+        
+        setFormData({
+          fechaIngreso: `${anio}-${mes}-${dia}`,
+          fechaSalida: "", 
+        });
+      } else {
+        setFormData({
+          fechaIngreso: selectedDate,
+          fechaSalida: "",
+        });
+      }
     }
-  }, [isOpen, selectedDate]);
+  }, [isOpen, selectedDate, isEditing, currentBooking]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -64,8 +86,6 @@ export function useClientBookingModal({
     setIsSubmitting(true);
 
     try {
-      // 🛠️ CONSULTA PREVIA AL /ME PARA RECUPERAR EL NOMBRE Y DNI REAL DESDE EL BACKEND
-      // Así garantizamos que la reserva se guarde con el DNI exacto con el que se registró
       const tokenBase64 = btoa(tokenPlano);
       const configHeaders = {
         headers: {
@@ -74,8 +94,9 @@ export function useClientBookingModal({
         },
       };
 
+      // Recuperamos el perfil real del huésped logueado
       const userProfileRes = await axios.get("http://localhost:8080/api/auth/me", configHeaders);
-      const perfilUser = userProfileRes.data; // Contiene { nombre, tipoDocumento, numeroDocumento }
+      const perfilUser = userProfileRes.data;
 
       const payload = {
         nombreCliente: perfilUser.nombre,
@@ -87,18 +108,34 @@ export function useClientBookingModal({
         habitacion: { id: room.id },
       };
 
-      // Guardamos la reserva usando las credenciales del usuario
-      await axios.post("http://localhost:8080/api/reservas", payload, configHeaders);
-      
-      toast.success("¡Tu reserva ha sido registrada con éxito! Te esperamos.", {
-        style: { background: "#059669", color: "white", border: "none" },
-      });
+      if (isEditing && bookingId) {
+        // 🟢 SOLUCIÓN AL ERROR DE TIPO: Limpiamos "RES-7021" para enviar sólo "7021" a Spring Boot
+        const idNumerico = bookingId.replace(/\D/g, "");
+
+        // 🛠️ MODO MODIFICAR: Envía los cambios mediante PUT al registro correspondiente con el ID numérico
+        await axios.put(`http://localhost:8080/api/reservas/${idNumerico}`, payload, configHeaders);
+        
+        toast.success("¡Tu estadía ha sido reprogramada con éxito!", {
+          style: { background: "#d97706", color: "white", border: "none" },
+        });
+      } else {
+        // 🚀 MODO CREAR: Envía una nueva reserva por el método POST tradicional
+        await axios.post("http://localhost:8080/api/reservas", payload, configHeaders);
+        
+        toast.success("¡Tu reserva ha sido registrada con éxito! Te esperamos.", {
+          style: { background: "#059669", color: "white", border: "none" },
+        });
+      }
       
       onSuccess?.();
       onClose();
     } catch (error: any) {
-      console.error("Error al registrar la reserva automatizada:", error);
-      toast.error("No se pudo procesar tu reserva. Inténtalo de nuevo.");
+      console.error("Error al procesar la operación en el servidor:", error);
+      toast.error(
+        isEditing 
+          ? "No se pudieron guardar las nuevas fechas. Inténtalo de nuevo." 
+          : "No se pudo registrar tu reserva. Inténtalo de nuevo."
+      );
     } finally {
       setIsSubmitting(false);
     }
